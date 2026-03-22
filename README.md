@@ -1,26 +1,26 @@
 # Mem Element Emulator (LTspice Simulation)
 
-This is a semester project we did in our 5th semester ECE. The goal was to understand how memristive behaviour works by building emulator circuits in LTspice — since actual memristive devices aren't something you can just get in a lab.
-
-The project is based on the paper by Biolek et al. (IEEE TCAS-II, 2025) and some related works listed at the bottom. We didn't invent the circuits — we studied, implemented, and analysed them ourselves in simulation.
+Semester V project on simulating mem-element behaviour using standard circuit components in LTspice. Based on the work by Biolek et al. (IEEE TCAS-II, 2025) and related papers — we implemented the circuits, ran the simulations, and tried to understand *why* the hysteresis forms the way it does, not just that it does.
 
 ---
 
-## Why this project
+## Background
 
-Real memristors need special nanoscale materials to fabricate. Most of us don't have access to that. But the interesting thing is — you can actually recreate memristive behaviour using normal components like diodes, capacitors, inductors, and JFETs. That's what an emulator does.
+The core idea is simple: a real memristor is hard to fabricate — it needs nanoscale titanium dioxide structures or similar. But you can get the same electrical behaviour (a pinched hysteresis loop in the V-I plane) using a nonlinear resistive two-port loaded with a capacitor or inductor. That's an emulator.
 
-We wanted to understand *why* the hysteresis loop forms, how different memory elements (capacitor vs inductor vs JFET) change the shape of the loop, and whether synthetic inductance using a GIC can replace bulky physical inductors.
+The paper by Biolek et al. goes deeper than just showing the loop — it derives the exact conditions a two-port must satisfy for the emulated element to qualify as a proper extended memristor (the zero-crossing property). We used this framework to understand each of our circuits.
 
 ---
 
-## What we simulated
+## What we built
 
 ### 1. Graetz bridge + Capacitor
 
-A standard diode bridge (D1N4148) with a 95 pF capacitor across it, driven by a low-frequency sine wave.
+Four 1N4148 diodes in a bridge configuration, with a 95 pF capacitor across the output port. Driven at 30 Hz.
 
-The capacitor stores charge during one half-cycle and that stored charge affects the next — that's what gives it memory. At 30 Hz, you get a clear pinched hysteresis loop in the V–I plot.
+The diode bridge is the nonlinear two-port. The capacitor is the memory element — it stores charge from one half-cycle and that stored charge modifies the next. At low frequencies, this produces a pinched hysteresis loop.
+
+One thing worth noting from the paper: the zero-crossing property (loop pinching exactly at the origin) holds only when all four diodes are identical. With mismatched diodes, the pinch point shifts. We used D1N4148 throughout to keep it symmetric.
 
 ```spice
 V1 Vin 0 SIN(0 1 30)
@@ -37,9 +37,11 @@ C1 2 3 95pF
 
 ### 2. Graetz bridge + Inductor
 
-Same bridge, but the capacitor is swapped for a 1 mH inductor. Inductors store magnetic flux instead of charge, and since current through an inductor can't change instantly, the memory effect is stronger.
+Same bridge, capacitor replaced with a 1 mH inductor. Driven at 12.15 Hz with 1N4007 diodes this time.
 
-The loop gets noticeably wider here compared to the capacitor case. The tradeoff is you need large inductance values to see this clearly at low frequencies, which is impractical for hardware.
+Inductors store magnetic flux rather than charge. Since current through an inductor resists sudden change, the memory effect is stronger — the loop gets wider. The state variable here is the inductor flux, not charge.
+
+Practical limitation: you need very high inductance to see clear low-frequency behaviour. That's what motivated the GIC stage.
 
 ```spice
 V1 Vin 0 SIN(0 2.4 12.15)
@@ -56,9 +58,11 @@ L1 2 3 1m
 
 ### 3. JFET-based emulator
 
-This one doesn't use a bridge at all. A J310 JFET has a channel resistance that varies with gate voltage. Under sinusoidal excitation, this resistance changes gradually with the signal history — which is exactly what gives mem-resistive behaviour.
+A J310 JFET with supporting resistors and a capacitor. No diode bridge here.
 
-The loop here is smoother than the passive stages, and the nice thing is you can tune the behaviour by changing the gate bias.
+The JFET's channel resistance varies with gate voltage. Under a sinusoidal input, the capacitor voltage (which controls the gate) changes gradually — giving the device a history-dependent resistance. That's the memory.
+
+Technically, the paper shows that the JFET circuit doesn't strictly satisfy the zero-crossing condition the way the diode bridge does. But the deviation is in the picoampere range in practice — immeasurably small. The loop still looks pinched at the origin, and all the fingerprints of memristive behaviour are present.
 
 ```spice
 V1 Vin 0 SIN(0 3.2 120)
@@ -75,47 +79,51 @@ J1 1 G 0 J310_MODEL
 
 ### 4. Floating GIC (synthetic inductor)
 
-To avoid the bulky inductor problem, we also designed a floating Generalized Impedance Converter using two UA741 op-amps. It creates equivalent inductance using only resistors and capacitors.
+The problem with physical inductors is that getting 1 mH or more in a compact form isn't easy — parasitics, size, cost. A Generalized Impedance Converter built from two UA741 op-amps solves this by synthesizing inductance electronically.
 
-The formula we used:
+The equivalent inductance comes out to:
 
 ```
-Leq = (R1 * R3 * C4 / R2) * R5
+Leq = (R1 * R3 * C4) / R2  *  R5
 ```
 
-With R = 10kΩ, C = 100pF, Rb = 1kΩ → Leq = 1 mH
+With R = 10 kΩ, C = 100 pF, Rb = 1 kΩ, this gives Leq = 1 mH — same as the physical inductor in stage 2, without the bulk.
 
-We tested this separately in a low-pass filter to verify it behaves like a real inductor. The frequency response matched. Integrating it with the Graetz bridge is left as future work.
-
----
-
-## Results summary
-
-All three main configurations produced a pinched hysteresis loop passing through the origin — which is the standard signature of mem-element behaviour.
-
-- Capacitor loop: moderate width, clearly frequency-dependent
-- Inductor loop: wider, stronger memory effect
-- JFET loop: smooth, tunable, no passive storage element needed
+We verified this independently using a low-pass filter — the frequency response matched what you'd expect from a real inductor. Connecting the GIC directly to the Graetz bridge to complete the emulator is left as future work.
 
 ---
 
-## How to run
+## Results
 
-1. Install LTspice (free, from Analog Devices)
-2. Open any `.asc` file from the `netlists/` folder
-3. Hit Run
-4. To get the V–I plot: right click the waveform → Add trace → X-axis: `V(2,3)`, Y-axis: `I(V1)`
+| Configuration | Loop shape | Memory mechanism |
+|---|---|---|
+| Bridge + Capacitor | Moderate width, frequency-dependent | Charge storage (state = qC) |
+| Bridge + Inductor | Wider, stronger | Flux storage (state = φL) |
+| JFET | Smooth, tunable | Channel resistance modulation |
 
----
-
-## Based on
-
-- D. Biolek, Z. Kolka, V. Biolkova, Z. Biolek — "Modeling and Emulation of Extended Memristors: Two-Port Approach Revisited," IEEE TCAS-II, 2025
-- F. Corinto, A. Ascoli — "Memristive diode bridge with LCR filter," Electronics Letters, 2012
-- J. Sadecki, W. Marszalek — "Analysis of a memristive diode bridge rectifier," Electronics Letters, 2019
-- R. Senani — "New single-capacitor simulations of floating inductors," 1982
-- L. O. Chua, S. M. Kang — "Memristive Devices and Systems," Proceedings of the IEEE, 1976
+All three produced a pinched hysteresis loop — the standard fingerprint of mem-element behaviour described in Chua's original work and verified in the Biolek paper.
 
 ---
 
-Done as part of B.Tech ECE Semester V at Faculty of Technology, University of Delhi, under the supervision of Prof. Raj Senani and Dr. Khushwant Sehra.
+## How to run the simulations
+
+1. Download LTspice (free, Analog Devices)
+2. Open any `.asc` file from `netlists/`
+3. Press Run (F5)
+4. For the V-I hysteresis plot: right-click waveform viewer → Add Trace → set X-axis to `V(2,3)`, Y-axis to `I(V1)`
+
+---
+
+## References
+
+- D. Biolek, Z. Kolka, V. Biolkova, Z. Biolek, Z. Kohl — "Modeling and Emulation of Extended Memristors: Two-Port Approach Revisited," *IEEE Trans. Circuits Syst. II*, vol. 72, no. 1, Jan. 2025
+- F. Corinto, A. Ascoli — "Memristive diode bridge with LCR filter," *Electronics Letters*, 2012
+- J. Sadecki, W. Marszalek — "Analysis of a memristive diode bridge rectifier," *Electronics Letters*, 2019
+- R. Senani — "New single-capacitor simulations of floating inductors," *Electrocomponent Science and Technology*, 1982
+- L. O. Chua, S. M. Kang — "Memristive Devices and Systems," *Proc. IEEE*, 1976
+- S. P. Adhikari et al. — "Three fingerprints of memristor," *IEEE Trans. Circuits Syst. I*, 2013
+
+---
+
+B.Tech ECE, Semester V — Faculty of Technology, University of Delhi
+Supervised by Prof. Raj Senani and Dr. Khushwant Sehra
