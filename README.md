@@ -12,15 +12,23 @@ The paper by Biolek et al. goes deeper than just showing the loop — it derives
 
 ---
 
-## What we built
+## What we simulated
 
-### 1. Graetz bridge + Capacitor
+### 1. Graetz Bridge + Capacitor
 
-Four 1N4148 diodes in a bridge configuration, with a 95 pF capacitor across the output port. Driven at 30 Hz.
+Four D1N4148 diodes in a bridge with a 95 pF capacitor across the output port. Driven at 30 Hz.
 
-The diode bridge is the nonlinear two-port. The capacitor is the memory element — it stores charge from one half-cycle and that stored charge modifies the next. At low frequencies, this produces a pinched hysteresis loop.
+**Circuit:**
 
-One thing worth noting from the paper: the zero-crossing property (loop pinching exactly at the origin) holds only when all four diodes are identical. With mismatched diodes, the pinch point shifts. We used D1N4148 throughout to keep it symmetric.
+![Capacitor Bridge Circuit](circuits/capacitor_bridge_circuit.png)
+
+The capacitor stores charge from one half-cycle — that stored charge modifies the next. At low frequencies this produces a pinched hysteresis loop. One thing worth noting from the paper: the zero-crossing property (loop pinching exactly at the origin) holds only when all four diodes are identical. We used D1N4148 throughout to keep the bridge symmetric.
+
+**Simulation result:**
+
+![Capacitor Hysteresis Loop](results/capacitor_hysteresis.jpg)
+
+The loop is narrow but clearly pinched at the origin — classic charge-controlled memristive behaviour. Current is in the nanoampere range because the capacitor (95 pF) and frequency (30 Hz) are both very small.
 
 ```spice
 V1 Vin 0 SIN(0 1 30)
@@ -35,13 +43,21 @@ C1 2 3 95pF
 
 ---
 
-### 2. Graetz bridge + Inductor
+### 2. Graetz Bridge + Inductor
 
-Same bridge, capacitor replaced with a 1 mH inductor. Driven at 12.15 Hz with 1N4007 diodes this time.
+Same bridge, capacitor replaced with a 1 mH inductor. 1N4007 diodes, driven at 12.15 Hz.
 
-Inductors store magnetic flux rather than charge. Since current through an inductor resists sudden change, the memory effect is stronger — the loop gets wider. The state variable here is the inductor flux, not charge.
+**Circuit:**
 
-Practical limitation: you need very high inductance to see clear low-frequency behaviour. That's what motivated the GIC stage.
+![Inductor Bridge Circuit](circuits/inductor_bridge_circuit.png)
+
+Inductors store magnetic flux rather than charge. Since current through an inductor can't change instantaneously, the memory effect is stronger — and the loop gets wider. The state variable here is the inductor flux, not charge.
+
+**Simulation result:**
+
+![Inductor Hysteresis Loop](results/inductor_hysteresis.jpeg)
+
+Significantly wider loop compared to the capacitor case — confirms that flux-controlled memory is stronger and longer-lasting than charge-based memory. The loop area directly reflects the depth of memory.
 
 ```spice
 V1 Vin 0 SIN(0 2.4 12.15)
@@ -56,13 +72,23 @@ L1 2 3 1m
 
 ---
 
-### 3. JFET-based emulator
+### 3. JFET-based Emulator
 
-A J310 JFET with supporting resistors and a capacitor. No diode bridge here.
+A J310 JFET with supporting resistors (R = RG = 1 MΩ) and a 1.48 nF capacitor. No diode bridge here.
 
-The JFET's channel resistance varies with gate voltage. Under a sinusoidal input, the capacitor voltage (which controls the gate) changes gradually — giving the device a history-dependent resistance. That's the memory.
+**Circuit:**
 
-Technically, the paper shows that the JFET circuit doesn't strictly satisfy the zero-crossing condition the way the diode bridge does. But the deviation is in the picoampere range in practice — immeasurably small. The loop still looks pinched at the origin, and all the fingerprints of memristive behaviour are present.
+![JFET Circuit](circuits/jfet_circuit.jpeg)
+
+The JFET's channel resistance varies with gate voltage. The capacitor charges gradually with the input signal, which shifts the gate bias — giving the device a history-dependent resistance. That's the memory mechanism here.
+
+Technically, the paper shows the JFET circuit doesn't strictly satisfy the zero-crossing condition the way the symmetric diode bridge does. But the deviation is in the picoampere range — immeasurably small in practice. The loop still pins at the origin and all memristive fingerprints are present.
+
+**Simulation result:**
+
+![JFET Hysteresis Loop](results/jfet_hysteresis.jpg)
+
+Smoother loop shape compared to the passive stages — because here the resistance change is governed by semiconductor physics (gradual channel modulation) rather than abrupt diode switching. Also tunable: changing R adjusts the loop shape.
 
 ```spice
 V1 Vin 0 SIN(0 3.2 120)
@@ -77,40 +103,26 @@ J1 1 G 0 J310_MODEL
 
 ---
 
-### 4. Floating GIC (synthetic inductor)
+## Results comparison
 
-The problem with physical inductors is that getting 1 mH or more in a compact form isn't easy — parasitics, size, cost. A Generalized Impedance Converter built from two UA741 op-amps solves this by synthesizing inductance electronically.
+| Configuration | Loop shape | Current scale | Memory mechanism |
+|---|---|---|---|
+| Bridge + Capacitor | Narrow, pinched | nA range | Charge storage (state = q_C) |
+| Bridge + Inductor | Wide, prominent | A range | Flux storage (state = φ_L) |
+| JFET | Smooth, S-shaped | mA range | Channel resistance modulation |
 
-The equivalent inductance comes out to:
-
-```
-Leq = (R1 * R3 * C4) / R2  *  R5
-```
-
-With R = 10 kΩ, C = 100 pF, Rb = 1 kΩ, this gives Leq = 1 mH — same as the physical inductor in stage 2, without the bulk.
-
-We verified this independently using a low-pass filter — the frequency response matched what you'd expect from a real inductor. Connecting the GIC directly to the Graetz bridge to complete the emulator is left as future work.
+All three produce a pinched hysteresis loop — the standard fingerprint of mem-element behaviour as defined by Chua and verified experimentally in the Biolek paper.
 
 ---
 
-## Results
+## How to run
 
-| Configuration | Loop shape | Memory mechanism |
-|---|---|---|
-| Bridge + Capacitor | Moderate width, frequency-dependent | Charge storage (state = qC) |
-| Bridge + Inductor | Wider, stronger | Flux storage (state = φL) |
-| JFET | Smooth, tunable | Channel resistance modulation |
-
-All three produced a pinched hysteresis loop — the standard fingerprint of mem-element behaviour described in Chua's original work and verified in the Biolek paper.
-
----
-
-## How to run the simulations
-
-1. Download LTspice (free, Analog Devices)
-2. Open any `.asc` file from `netlists/`
+1. Install LTspice (free, Analog Devices)
+2. Open any `.cir` file from `netlists/`
 3. Press Run (F5)
-4. For the V-I hysteresis plot: right-click waveform viewer → Add Trace → set X-axis to `V(2,3)`, Y-axis to `I(V1)`
+4. For V-I hysteresis: right-click waveform → Add Trace
+   - Capacitor/Inductor: X-axis = `V(2,3)`, Y-axis = `I(V1)`
+   - JFET: X-axis = `V(vin)`, Y-axis = `I(Rsen)`
 
 ---
 
@@ -125,5 +137,5 @@ All three produced a pinched hysteresis loop — the standard fingerprint of mem
 
 ---
 
-B.Tech ECE, Semester V — Faculty of Technology, University of Delhi
+B.Tech ECE, Semester V — Faculty of Technology, University of Delhi  
 Supervised by Prof. Raj Senani and Dr. Khushwant Sehra
