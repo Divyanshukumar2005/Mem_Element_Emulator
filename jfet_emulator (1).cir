@@ -1,0 +1,26 @@
+* ============================================================
+* Mem Element Emulator - Stage 3: JFET-based Passive Emulator
+* Based on: Biolek et al., IEEE TCAS-II, 2025 (Section IV)
+* Original circuit from: Biolek et al., CSCS 2015
+* JFET: J310 (channel resistance varies with gate voltage)
+* Memory via capacitor voltage controlling gate bias
+* Input: 3.2V peak, 120Hz sine
+* To plot V-I hysteresis: X-axis = V(1,0), Y-axis = I(V1)
+* Note: current sensed via Rsen (10 ohm series resistor)
+* ============================================================
+
+V1 Vin 0 SIN(0 3.2 120)
+
+Rsen Vin 1 10
+R1 1 2 1Meg
+RG 2 G 1Meg
+C1 2 0 1.48n
+
+* JFET: Drain=1, Gate=G, Source=0
+J1 1 G 0 J310_MODEL
+
+.model J310_MODEL NJF (VTO=-2.5 BETA=2m IS=1e-12 LAMBDA=0.02 CGS=2p CGD=2p)
+
+.tran 0 40m 0
+
+.end

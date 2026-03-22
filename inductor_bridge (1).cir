@@ -1,0 +1,25 @@
+* ============================================================
+* Mem Element Emulator - Stage 2: Graetz Bridge + Inductor
+* Based on: Biolek et al., IEEE TCAS-II, 2025
+* Diode: 1N4007
+* Inductor: 1mH (flux-based memory - wider hysteresis loop)
+* Input: 2.4V peak, 12.15Hz sine
+* To plot V-I hysteresis: X-axis = V(2,3), Y-axis = I(V1)
+* ============================================================
+
+V1 Vin 0 SIN(0 2.4 12.15)
+
+D1 Vin 2 1N4007
+D2 3 Vin 1N4007
+D3 3 0 1N4007
+D4 0 2 1N4007
+
+L1 2 3 1m
+
+.model 1N4007 D()
+
+.tran 0 0.3 0.05 50
+
+.PROBE
+
+.end
