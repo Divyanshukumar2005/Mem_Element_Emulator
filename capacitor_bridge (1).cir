@@ -1,0 +1,23 @@
+* ============================================================
+* Mem Element Emulator - Stage 1: Graetz Bridge + Capacitor
+* Based on: Biolek et al., IEEE TCAS-II, 2025
+* Diode: D1N4148 (identical diodes - required for zero-crossing property)
+* Capacitor: 95pF
+* Input: 1V peak, 30Hz sine
+* To plot V-I hysteresis: X-axis = V(2,3), Y-axis = I(V1)
+* ============================================================
+
+V1 Vin 0 SIN(0 1 30)
+
+D1 Vin 2 D1N4148
+D2 3 Vin D1N4148
+D3 3 0 D1N4148
+D4 0 2 D1N4148
+
+C1 2 3 95pF
+
+.model D1N4148 D(IS=2.52e-9 N=1.9 BV=100 IBV=0.1 CJO=4.0e-12 M=0.333 TT=4e-9)
+
+.tran 0 0.3 0.05 50u
+
+.end
